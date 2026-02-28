@@ -1,26 +1,94 @@
+// ==========================================
+// CEOCARD v3.8.0 - PARTE 1 (Core, Calendário, Briefing, Dashboard)
+// ==========================================
+
 // --- ESTADO INICIAL E PERSISTÊNCIA ---
 let clientes = JSON.parse(localStorage.getItem('ceocard_clientes')) || [];
-let categorias = JSON.parse(localStorage.getItem('ceocard_categorias')) || [
-    { id: 1, nome: 'Agendado', cor: '#0079bf' },
-    { id: 2, nome: 'Em Atendimento', cor: '#f2d600' },
-    { id: 3, nome: 'Resolvido', cor: '#61bd4f' }
-];
 let agendamentos = JSON.parse(localStorage.getItem('ceocard_agenda')) || [];
 let ramos = JSON.parse(localStorage.getItem('ceocard_ramos')) || [{ id: 1, nome: 'Geral' }];
 let historico = JSON.parse(localStorage.getItem('ceocard_historico')) || [];
 let atendimentoAtivo = null;
 let timerInterval = null;
 
-// --- NAVEGAÇÃO E SUBTÍTULOS ---
+// Filtros da Agenda
+let filtroAgendaTipo = 'todas'; // 'todas', 'urgencias', 'concluidas'
+let dataFiltroAtual = getLocalISODate(new Date()); // Começa no dia de hoje
 
+// Os 8 Status Fixos
+const STATUS_FIXOS = [
+    { id: 'sem_registro', nome: 'Sem Registro', classe: 'bg-sem-registro' },
+    { id: 'livre', nome: 'Livre', classe: 'bg-livre' },
+    { id: 'visita_agendada', nome: 'Visita Agendada', classe: 'bg-visita-agendada' },
+    { id: 'reuniao_agendada', nome: 'Reunião Agendada', classe: 'bg-reuniao-agendada' },
+    { id: 'em_atendimento', nome: 'Em Atendimento', classe: 'bg-em-atendimento' },
+    { id: 'visitado', nome: 'Cliente Visitado', classe: 'bg-visitado' },
+    { id: 'assistido', nome: 'Cliente Assistido', classe: 'bg-assistido' },
+    { id: 'inativo', nome: 'Cliente Inativo', classe: 'bg-inativo' }
+];
+
+// --- AUXILIARES DE DATA ---
+function getLocalISODate(date) {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().split('T')[0];
+}
+
+function getNomeDiaCurto(date) {
+    const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return dias[date.getDay()];
+}
+
+// --- TEMA (DARK MODE) ---
+function initTheme() {
+    const isDark = localStorage.getItem('ceocard_theme') === 'dark';
+    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const toggle = document.getElementById('darkModeToggle');
+    if (toggle) toggle.checked = isDark;
+}
+
+function toggleDarkMode() {
+    const isDark = document.getElementById('darkModeToggle').checked;
+    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('ceocard_theme', isDark ? 'dark' : 'light');
+}
+
+// --- MOTOR INTELIGENTE DE STATUS ---
+function calcularStatusCliente(cliente) {
+    if (cliente.inativo) return STATUS_FIXOS.find(s => s.id === 'inativo');
+
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+
+    if (atendimentoAtivo && atendimentoAtivo.clienteId == cliente.id) {
+        return STATUS_FIXOS.find(s => s.id === 'em_atendimento');
+    }
+
+    const agendaMes = agendamentos.filter(a => a.clienteId == cliente.id && !a.finalizado && 
+        new Date(a.data).getMonth() === mesAtual && new Date(a.data).getFullYear() === anoAtual);
+    
+    if (agendaMes.length > 0) {
+        const temVisita = agendaMes.some(a => a.tipo.includes('Visita') || a.tipo.includes('Urgência'));
+        return STATUS_FIXOS.find(s => s.id === (temVisita ? 'visita_agendada' : 'reuniao_agendada'));
+    }
+
+    const histMes = historico.filter(h => h.clienteId == cliente.id && 
+        new Date(h.dataFim).getMonth() === mesAtual && new Date(h.dataFim).getFullYear() === anoAtual);
+    
+    if (histMes.length > 0) {
+        const teveVisita = histMes.some(h => h.tipo.includes('Visita') || h.tipo.includes('Urgência'));
+        return STATUS_FIXOS.find(s => s.id === (teveVisita ? 'visitado' : 'assistido'));
+    }
+
+    const histTotal = historico.filter(h => h.clienteId == cliente.id);
+    if (histTotal.length === 0) return STATUS_FIXOS.find(s => s.id === 'sem_registro');
+
+    return STATUS_FIXOS.find(s => s.id === 'livre');
+}
+
+// --- NAVEGAÇÃO ---
 function switchView(view) {
     const views = ['timeline-view', 'dashboard-view', 'clientes-view', 'config-view'];
-    const titleMap = { 
-        'timeline': 'Agenda do Dia', 
-        'dashboard': 'Visão Geral e Operação', 
-        'clientes': 'Gestão de Clientes', 
-        'config': 'Configurações de Sistema' 
-    };
+    const titleMap = { 'timeline': 'Agenda do Dia', 'dashboard': 'Visão Geral', 'clientes': 'Gestão de Clientes', 'config': 'Ajustes do Sistema' };
 
     const subtitle = document.getElementById('page-subtitle');
     if (subtitle) subtitle.innerText = titleMap[view] || "";
@@ -34,7 +102,10 @@ function switchView(view) {
     const activeBtn = document.getElementById("btn-nav-" + view);
     if (activeBtn) activeBtn.classList.add('active');
 
-    if (view === 'timeline') renderTimeline();
+    if (view === 'timeline') {
+        gerarDateStrip();
+        renderTimeline();
+    }
     if (view === 'dashboard') { renderDashboard(); renderBoard(); }
     if (view === 'clientes') { popularFiltrosClientes(); filtrarClientes(); }
     if (view === 'config') { renderListasConfig(); }
@@ -51,113 +122,30 @@ function toggleModal(modalId) {
         if (modalId === 'modalAgendamento') {
             popularSelectClientes();
             const alerta = document.getElementById('alertaConflito');
-            if (alerta) alerta.style.display = 'none'; // Limpa alerta ao abrir
+            if (alerta) alerta.style.display = 'none';
         }
-        if (modalId === 'modalAtendimento') popularStatusFinal();
     }
 }
 
-// --- FUNÇÕES DE BACKUP (EXPORTAR / IMPORTAR) ---
-
-function exportarDados() {
-    const backup = { clientes, categorias, agendamentos, ramos, historico, dataBackup: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ceocard_backup_${new Date().toLocaleDateString().replace(/\//g,'-')}.json`;
-    a.click();
-    alert("✅ Backup exportado com sucesso!");
-}
-
-function importarDados(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (confirm("⚠️ ATENÇÃO: Isto substituirá todos os seus dados atuais. Deseja continuar?")) {
-                localStorage.setItem('ceocard_clientes', JSON.stringify(data.clientes || []));
-                localStorage.setItem('ceocard_categorias', JSON.stringify(data.categorias || []));
-                localStorage.setItem('ceocard_agenda', JSON.stringify(data.agendamentos || []));
-                localStorage.setItem('ceocard_ramos', JSON.stringify(data.ramos || []));
-                localStorage.setItem('ceocard_historico', JSON.stringify(data.historico || []));
-                alert("🚀 Dados restaurados com sucesso! O sistema será recarregado.");
-                location.reload();
-            }
-        } catch (err) {
-            alert("❌ Ficheiro inválido ou corrompido.");
-        }
-    };
-    reader.readAsText(file);
-}
-
-// --- HISTÓRICO POR CLIENTE ---
-
-function verHistoricoCliente(clienteId) {
-    const cli = clientes.find(c => c.id == clienteId);
-    const lista = historico.filter(h => h.clienteId == clienteId).sort((a,b) => new Date(b.dataFim) - new Date(a.dataFim));
-    
-    document.getElementById('histClienteNome').innerText = cli ? `Histórico: ${cli.fantasia}` : 'Histórico do Cliente';
-    const container = document.getElementById('histLista');
-    container.innerHTML = '';
-
-    if (lista.length === 0) {
-        container.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Nenhum atendimento registado para este cliente.</p>';
-    } else {
-        lista.forEach(h => {
-            const dataObj = new Date(h.dataFim);
-            const dataStr = `${dataObj.getDate().toString().padStart(2,'0')}/${(dataObj.getMonth()+1).toString().padStart(2,'0')}/${dataObj.getFullYear()} às ${dataObj.getHours().toString().padStart(2,'0')}:${dataObj.getMinutes().toString().padStart(2,'0')}`;
-            container.innerHTML += `
-                <div class="history-item">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                        <strong style="color:#2c3e50;">${dataStr}</strong>
-                        <span style="font-size:0.75rem; background:#e2e8f0; padding:3px 8px; border-radius:12px; color:#2c3e50;">${h.duracaoFormatada || '---'}</span>
-                    </div>
-                    <p style="font-size:0.85rem; margin:8px 0; color:#4a5568;">${h.relatorio || '<em>Sem relatório registado.</em>'}</p>
-                    <div style="margin-top:8px;">
-                        <small style="background:#27ae60; color:white; padding:2px 6px; border-radius:4px; font-weight:bold;">${h.statusFinal || 'Resolvido'}</small>
-                    </div>
-                    ${h.observacaoPos ? `<div style="margin-top:10px; border-top:1px dashed #cbd5e0; padding-top:8px; font-size:0.8rem; color:#2980b9;"><strong>Nota Adicional:</strong> ${h.observacaoPos}</div>` : ''}
-                </div>
-            `;
-        });
-    }
-    toggleModal('modalHistorico');
-}
-
-// --- DASHBOARD E QUADRO EVOLUÍDO ---
-
+// --- DASHBOARD E QUADRO ---
 function renderDashboard() {
-    const agora = new Date();
-    const mesAtual = agora.getMonth();
-    const anoAtual = agora.getFullYear();
+    const hoje = new Date();
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
     
-    const visitasMes = historico.filter(h => {
-        const d = new Date(h.dataFim);
-        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
-    });
-    
+    const visitasMes = historico.filter(h => new Date(h.dataFim).getMonth() === mesAtual && new Date(h.dataFim).getFullYear() === anoAtual);
     const totalSegundos = visitasMes.reduce((acc, curr) => acc + (curr.duracaoSegundos || 0), 0);
-    const resolvidos = visitasMes.filter(v => v.statusFinal === 'Resolvido').length;
-    
-    const pendentes = clientes.filter(c => {
-        if (!c.ultimoAtendimento) return true;
-        const diff = Math.floor((agora - new Date(c.ultimoAtendimento)) / (1000 * 60 * 60 * 24));
-        return diff > 30;
-    }).length;
+    const resolvidos = visitasMes.filter(v => v.statusFinal === 'Resolvido').length; 
+    const inativos = clientes.filter(c => c.inativo).length;
 
     if(document.getElementById('stat-visitas')) document.getElementById('stat-visitas').innerText = visitasMes.length;
     if(document.getElementById('stat-horas')) document.getElementById('stat-horas').innerText = Math.floor(totalSegundos / 3600) + "h";
-    if(document.getElementById('stat-resolvidos')) document.getElementById('stat-resolvidos').innerText = resolvidos;
-    if(document.getElementById('stat-pendentes')) document.getElementById('stat-pendentes').innerText = pendentes;
+    if(document.getElementById('stat-resolvidos')) document.getElementById('stat-resolvidos').innerText = resolvidos || visitasMes.length;
+    if(document.getElementById('stat-pendentes')) document.getElementById('stat-pendentes').innerText = inativos;
 
     const porc = Math.min((visitasMes.length / 20) * 100, 100);
     const fill = document.getElementById('eficiencia-fill');
     if (fill) fill.style.width = porc + "%";
-    const label = document.getElementById('eficiencia-label');
-    if (label) label.innerText = `Eficiência Mensal (${Math.floor(porc)}% da meta)`;
 }
 
 function renderBoard() {
@@ -165,60 +153,140 @@ function renderBoard() {
     if (!container) return;
     container.innerHTML = '';
 
-    categorias.forEach(cat => {
+    STATUS_FIXOS.forEach(status => {
+        const clientesNesteStatus = clientes.filter(c => calcularStatusCliente(c).id === status.id);
+        if (clientesNesteStatus.length === 0) return;
+
         const col = document.createElement('div');
         col.className = 'column';
-        const filtrados = clientes.filter(c => c.statusId == cat.id);
+        col.innerHTML = `<h3>${status.nome} <small>(${clientesNesteStatus.length})</small></h3>`;
         
-        col.innerHTML = `<h3>${cat.nome} <small>(${filtrados.length})</small></h3>`;
-        
-        filtrados.forEach(cli => {
-            const agendaAtiva = agendamentos.find(a => a.clienteId == cli.id && !a.finalizado);
-            let agendaHtml = '';
-            
-            if (agendaAtiva) {
-                let corTipo = '#3498db'; 
-                if (agendaAtiva.tipo === 'Urgência') corTipo = '#e74c3c';
-                if (agendaAtiva.tipo === 'Reunião') corTipo = '#8e44ad';
-                
-                const dataFormatada = agendaAtiva.data.split('-').reverse().join('/');
-                agendaHtml = `
-                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #ddd; font-size:0.75rem; color:#555;">
-                        <span class="chip" style="background:${corTipo}; font-size:0.6rem;">${agendaAtiva.tipo}</span>
-                        <div style="margin-top:5px; font-weight:bold;"><i class="fa-solid fa-clock"></i> ${dataFormatada} às ${agendaAtiva.hora}</div>
-                    </div>
-                `;
-            }
-
+        clientesNesteStatus.forEach(cli => {
+            const statusObj = calcularStatusCliente(cli);
             col.innerHTML += `
                 <div class="card">
-                    <span class="chip" style="background:${cat.cor}">${cat.nome}</span>
-                    <strong style="display:block; margin-top:5px; color:#2c3e50;">${cli.fantasia}</strong>
-                    <div style="font-size:0.7rem; color:#7f8c8d; margin-top:5px;">
+                    <span class="status-chip ${statusObj.classe}">${statusObj.nome}</span>
+                    <strong style="display:block; margin-top:5px; color:var(--primary);">${cli.fantasia}</strong>
+                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:5px;">
                         <i class="fa-solid fa-briefcase"></i> ${cli.ramo || 'Geral'}
                     </div>
-                    ${agendaHtml}
                 </div>`;
         });
         container.appendChild(col);
     });
 }
 
-// --- TIMELINE ACCORDION E PERSISTÊNCIA ---
+// --- CALENDÁRIO INTERATIVO (DATE STRIP) ---
+function gerarDateStrip() {
+    const container = document.getElementById('dateStripContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const hoje = new Date();
+    // Gera 15 dias para trás e 30 dias para a frente
+    for (let i = -15; i <= 30; i++) {
+        const d = new Date(hoje);
+        d.setDate(hoje.getDate() + i);
+        
+        const dataISOCurto = getLocalISODate(d);
+        const diaSemana = getNomeDiaCurto(d);
+        const diaMes = d.getDate().toString().padStart(2, '0');
+        
+        const isSelected = dataISOCurto === dataFiltroAtual;
+        
+        const btn = document.createElement('div');
+        btn.className = `date-item ${isSelected ? 'active' : ''}`;
+        btn.id = `date-btn-${dataISOCurto}`;
+        btn.onclick = () => selecionarDataFiltro(dataISOCurto);
+        
+        btn.innerHTML = `<span class="day">${diaSemana}</span><span class="date">${diaMes}</span>`;
+        container.appendChild(btn);
+    }
+    
+    // Rola para a data selecionada suavemente
+    setTimeout(() => {
+        const btnAtivo = document.getElementById(`date-btn-${dataFiltroAtual}`);
+        if (btnAtivo) {
+            btnAtivo.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    }, 100);
+}
+
+function selecionarDataFiltro(dataStr) {
+    dataFiltroAtual = dataStr;
+    gerarDateStrip();
+    renderTimeline();
+}
+
+// --- BRIEFING DIÁRIO (NOTIFICAÇÕES) ---
+function atualizarBriefingDiario(agendaDoDia) {
+    const card = document.getElementById('dailyBriefing');
+    const title = document.getElementById('briefingTitle');
+    const text = document.getElementById('briefingText');
+    if (!card || !title || !text) return;
+
+    const isHoje = dataFiltroAtual === getLocalISODate(new Date());
+    title.innerText = isHoje ? "Resumo de Hoje" : `Resumo do dia ${dataFiltroAtual.split('-').reverse().join('/')}`;
+
+    const total = agendaDoDia.length;
+    const pendentes = agendaDoDia.filter(a => !a.finalizado).length;
+    const concluidas = total - pendentes;
+    const urgencias = agendaDoDia.filter(a => a.tipo.includes('Urgência') && !a.finalizado).length;
+
+    if (total === 0) {
+        card.style.display = 'flex';
+        card.style.background = 'linear-gradient(135deg, #1abc9c, #16a085)';
+        card.querySelector('.briefing-icon').innerHTML = '<i class="fa-solid fa-mug-hot"></i>';
+        text.innerText = "Dia livre! Nenhum compromisso agendado para esta data.";
+    } else if (pendentes === 0) {
+        card.style.display = 'flex';
+        card.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+        card.querySelector('.briefing-icon').innerHTML = '<i class="fa-solid fa-trophy"></i>';
+        text.innerText = `Parabéns! Finalizaste todos os ${total} compromissos deste dia.`;
+    } else {
+        card.style.display = 'flex';
+        card.style.background = urgencias > 0 ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, var(--brand-orange), #ff8a00)';
+        card.querySelector('.briefing-icon').innerHTML = urgencias > 0 ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-bell"></i>';
+        
+        let msg = `Tens ${pendentes} compromisso(s) pendente(s). `;
+        if (urgencias > 0) msg += `Atenção: ${urgencias} são urgências!`;
+        else msg += "Bom trabalho em campo!";
+        
+        text.innerText = msg;
+    }
+}
+
+// --- AGENDA INTERATIVA E CARDS RICOS ---
+function filtrarAgenda(tipo) {
+    filtroAgendaTipo = tipo;
+    document.querySelectorAll('.chip-filter').forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    renderTimeline();
+}
 
 function renderTimeline() {
     const container = document.getElementById('timelineList');
     if (!container) return;
     container.innerHTML = '';
 
-    const agenda = agendamentos.sort((a, b) => {
-        const dataA = new Date((a.data || '') + 'T' + (a.hora || '00:00'));
-        const dataB = new Date((b.data || '') + 'T' + (b.hora || '00:00'));
-        return dataA - dataB;
-    });
+    // Filtra primeiro pela data selecionada no Date Strip
+    let agendaDoDia = agendamentos.filter(a => a.data === dataFiltroAtual);
+    
+    // Atualiza o painel de Briefing
+    atualizarBriefingDiario(agendaDoDia);
+
+    // Filtra adicionalmente pelo chip (Todas, Urgências, Concluídas)
+    let agendaFiltrada = agendaDoDia;
+    if (filtroAgendaTipo === 'urgencias') {
+        agendaFiltrada = agendaDoDia.filter(a => a.tipo.includes('Urgência'));
+    } else if (filtroAgendaTipo === 'concluidas') {
+        agendaFiltrada = agendaDoDia.filter(a => a.finalizado);
+    }
+
+    const agenda = agendaFiltrada.sort((a, b) => new Date((a.data||'')+'T'+(a.hora||'00:00')) - new Date((b.data||'')+'T'+(b.hora||'00:00')));
 
     if (agenda.length === 0) {
-        container.innerHTML = '<p style="text-align:center; padding:30px; color:#999;">Agenda do dia livre. Use o botão (+) para agendar.</p>';
+        container.innerHTML = `<p style="text-align:center; padding:30px; color:var(--text-muted);"><i class="fa-solid fa-box-open" style="font-size:2rem; display:block; margin-bottom:10px;"></i> Nada a mostrar neste filtro.</p>`;
         return;
     }
 
@@ -227,28 +295,36 @@ function renderTimeline() {
         const item = document.createElement('div');
         item.className = 'timeline-item' + (age.finalizado ? ' finalizado' : '');
         
-        let corTipo = '#3498db'; 
-        if (age.tipo.includes('Urgência')) corTipo = '#e74c3c';
-        if (age.tipo.includes('Reunião')) corTipo = '#8e44ad';
+        let corTipo = 'var(--info)'; 
+        let iconeTipo = 'fa-tag';
+        if (age.tipo.includes('Urgência')) { corTipo = 'var(--danger)'; iconeTipo = 'fa-triangle-exclamation'; }
+        if (age.tipo.includes('Reunião')) { corTipo = '#8e44ad'; iconeTipo = 'fa-handshake'; }
+        
+        const duracaoPrevista = age.tipo.includes('Reunião') ? '30 min' : '1h30m';
 
         item.innerHTML = `
             <div class="timeline-header" onclick="this.parentElement.classList.toggle('active')">
                 <div>
-                    <strong style="display:block; font-size:1.05rem; color:#2c3e50;">${cli ? cli.fantasia : 'Externo'}</strong>
-                    <small style="display:block; color:${corTipo}; margin-top:3px; font-weight:bold;"><i class="fa-solid fa-tag"></i> ${age.tipo}</small>
+                    <strong style="display:block; font-size:1.05rem; color:var(--primary);">${cli ? cli.fantasia : 'Externo'}</strong>
+                    <div style="display:flex; gap:8px; margin-top:5px; align-items:center;">
+                        <span style="background:${corTipo}; color:white; font-size:0.65rem; padding:3px 8px; border-radius:6px; font-weight:bold;">
+                            <i class="fa-solid ${iconeTipo}"></i> ${age.tipo}
+                        </span>
+                        ${!age.finalizado ? `<span style="font-size:0.7rem; color:var(--text-muted);"><i class="fa-regular fa-clock"></i> Est. ${duracaoPrevista}</span>` : ''}
+                    </div>
                 </div>
                 <div style="text-align:right;">
-                    <strong style="color:#2980b9;">${age.hora || '--:--'}</strong>
-                    ${age.finalizado ? '<i class="fa-solid fa-circle-check" style="color:#27ae60; margin-left:8px; font-size:1.1rem;"></i>' : '<i class="fa-solid fa-chevron-down" style="margin-left:8px; color:#bdc3c7;"></i>'}
+                    <strong style="color:var(--primary); font-size:1.2rem; font-weight:900;">${age.hora || '--:--'}</strong>
+                    ${age.finalizado ? '<i class="fa-solid fa-circle-check" style="color:var(--success); margin-left:8px; font-size:1.2rem;"></i>' : '<i class="fa-solid fa-chevron-down" style="margin-left:8px; color:var(--text-muted);"></i>'}
                 </div>
             </div>
             <div class="timeline-body">
-                <div style="font-size:0.85rem; color:#555; margin-bottom:15px; background:#f4f7f6; padding:10px; border-radius:6px;">
-                    <div style="margin-bottom:5px;"><i class="fa-solid fa-calendar-day" style="color:#7f8c8d; width:20px;"></i> <strong>Data:</strong> ${age.data.split('-').reverse().join('/')}</div>
-                    <div style="margin-bottom:5px;"><i class="fa-solid fa-map-location-dot" style="color:#7f8c8d; width:20px;"></i> <strong>Endereço:</strong> ${cli ? (cli.rua || 'Não informado') : '---'}</div>
-                    <div><i class="fa-solid fa-address-book" style="color:#7f8c8d; width:20px;"></i> <strong>Contato:</strong> ${cli ? (cli.contato || 'Não informado') : '---'}</div>
+                <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:15px; background:var(--bg-secondary); padding:12px; border-radius:8px; border:1px solid var(--border-color);">
+                    <div style="margin-bottom:6px;"><i class="fa-solid fa-map-location-dot" style="color:var(--text-muted); width:20px;"></i> <strong>Endereço:</strong> ${cli ? (cli.rua || 'N/A') : '---'}</div>
+                    <div style="margin-bottom:6px;"><i class="fa-solid fa-address-book" style="color:var(--text-muted); width:20px;"></i> <strong>Contato:</strong> ${cli ? (cli.contato || 'N/A') : '---'}</div>
+                    ${cli && cli.telefone ? `<div><i class="fa-brands fa-whatsapp" style="color:#25D366; width:20px;"></i> <strong>Tel:</strong> ${cli.telefone}</div>` : ''}
                 </div>
-                <button class="btn-save" style="width:100%; background:${age.finalizado ? '#27ae60' : '#3498db'}; box-shadow:0 4px 6px rgba(0,0,0,0.1);" 
+                <button class="btn-save" style="width:100%; background:${age.finalizado ? 'var(--success)' : 'var(--brand-orange)'}; box-shadow:0 4px 6px rgba(0,0,0,0.1);" 
                         onclick="abrirAtendimento(${age.id})">
                     <i class="fa-solid ${age.finalizado ? 'fa-book-open' : 'fa-play'}"></i> 
                     ${age.finalizado ? 'Ver Registro do Atendimento' : 'Iniciar Atendimento'}
@@ -257,8 +333,12 @@ function renderTimeline() {
         container.appendChild(item);
     });
 }
+// ==================== FIM DA PARTE 1 ====================
+// ==========================================
+// CEOCARD v3.8.0 - PARTE 2 (Atendimento, Clientes, Ajustes e Lógica)
+// ==========================================
 
-// --- ATENDIMENTO (CHECK-IN / OUT) ---
+// --- ATENDIMENTO (CHECK-IN / OUT SIMPLIFICADO) ---
 
 function abrirAtendimento(id) {
     const age = agendamentos.find(a => a.id == id);
@@ -278,12 +358,14 @@ function abrirAtendimento(id) {
     document.getElementById('areaObservacaoPos').style.display = isFin ? 'block' : 'none';
     
     document.getElementById('atendRelatorio').disabled = isFin;
-    document.getElementById('atendStatusFinal').disabled = isFin;
     
     if(isFin) document.getElementById('atendObsPos').value = age.observacaoPos || '';
 
-    document.getElementById('proxAgeData').value = '';
-    document.getElementById('proxAgeHora').value = '';
+    // Limpa os campos do próximo agendamento opcional
+    const dataProx = document.getElementById('proxAgeData');
+    const horaProx = document.getElementById('proxAgeHora');
+    if (dataProx) dataProx.value = '';
+    if (horaProx) horaProx.value = '';
 
     toggleModal('modalAtendimento');
 }
@@ -313,7 +395,6 @@ function realizarCheckOut() {
         agendamentos[index].duracaoSegundos = duracaoSeg;
         agendamentos[index].duracaoFormatada = document.getElementById('atendTimer').innerText;
         agendamentos[index].relatorio = document.getElementById('atendRelatorio').value;
-        agendamentos[index].statusFinal = document.getElementById('atendStatusFinal').value;
         agendamentos[index].dataFim = fim;
         historico.push({...agendamentos[index]});
     }
@@ -321,22 +402,36 @@ function realizarCheckOut() {
     const cliIdx = clientes.findIndex(c => c.id == atendimentoAtivo.clienteId);
     if (cliIdx !== -1) {
         clientes[cliIdx].ultimoAtendimento = fim;
-        const cat = categorias.find(c => c.nome === agendamentos[index].statusFinal);
-        if (cat) clientes[cliIdx].statusId = cat.id;
     }
 
+    // Processa agendamento opcional para o futuro
     const pD = document.getElementById('proxAgeData').value;
     const pH = document.getElementById('proxAgeHora').value;
+    const pT = document.getElementById('proxAgeTipo').value;
     if (pD && pH) {
-        agendamentos.push({ id: Date.now() + 1, clienteId: atendimentoAtivo.clienteId, data: pD, hora: pH, tipo: "Visita de Rotina", finalizado: false });
+        agendamentos.push({ 
+            id: Date.now() + 1, 
+            clienteId: atendimentoAtivo.clienteId, 
+            data: pD, 
+            hora: pH, 
+            tipo: pT, 
+            finalizado: false 
+        });
     }
 
     saveData();
     localStorage.setItem('ceocard_historico', JSON.stringify(historico));
     localStorage.setItem('ceocard_agenda', JSON.stringify(agendamentos));
     
+    atendimentoAtivo = null;
     toggleModal('modalAtendimento');
-    switchView('dashboard');
+    
+    // Volta para o quadro ou atualiza a agenda, dependendo de onde o utilizador estava
+    if(document.getElementById('timeline-view').style.display === 'flex') {
+        renderTimeline();
+    } else {
+        switchView('dashboard'); 
+    }
 }
 
 function salvarObservacaoPos() {
@@ -351,11 +446,12 @@ function salvarObservacaoPos() {
     }
 }
 
-// --- CLIENTES: CADASTRO, EDIÇÃO E FILTROS ---
+// --- CLIENTES: CADASTRO, EDIÇÃO E FILTROS AUTOMATIZADOS ---
 
 function abrirModalNovoCliente() {
     document.getElementById('formCliente').reset();
     document.getElementById('cliId').value = ''; 
+    document.getElementById('cliInativo').checked = false; 
     document.getElementById('modalClienteTitulo').innerHTML = '<i class="fa-solid fa-user-plus"></i> Novo Cliente';
     toggleModal('modalCliente');
 }
@@ -368,6 +464,7 @@ function abrirModalEditarCliente(clienteId) {
     document.getElementById('cliCodigo').value = cli.codigo || '';
     document.getElementById('cliRazao').value = cli.razao || '';
     document.getElementById('cliFantasia').value = cli.fantasia || '';
+    document.getElementById('cliInativo').checked = cli.inativo === true;
     
     popularSelectRamos();
     document.getElementById('cliRamo').value = cli.ramo || '';
@@ -403,7 +500,8 @@ if(formCliente) {
             estado: document.getElementById('cliEstado').value,
             contato: document.getElementById('cliContatoNome').value,
             telefone: document.getElementById('cliTelefone').value,
-            obs: document.getElementById('cliObs').value
+            obs: document.getElementById('cliObs').value,
+            inativo: document.getElementById('cliInativo').checked 
         };
 
         if (idEdicao) {
@@ -416,7 +514,6 @@ if(formCliente) {
             clientes.push({
                 id: Date.now(),
                 ...dadosForm,
-                statusId: null, 
                 ultimoAtendimento: null
             });
             alert("Novo cliente cadastrado com sucesso!");
@@ -425,7 +522,7 @@ if(formCliente) {
         saveData();
         toggleModal('modalCliente');
         this.reset();
-        switchView('clientes');
+        switchView('clientes'); 
     });
 }
 
@@ -434,7 +531,7 @@ function popularFiltrosClientes() {
     if (selRamo) selRamo.innerHTML = '<option value="">Todos os Ramos</option>' + ramos.map(r => `<option value="${r.nome}">${r.nome}</option>`).join('');
 
     const selStatus = document.getElementById('filterStatus');
-    if (selStatus) selStatus.innerHTML = '<option value="">Todos os Status</option>' + categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    if (selStatus) selStatus.innerHTML = '<option value="">Todos os Status</option>' + STATUS_FIXOS.map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
 }
 
 function filtrarClientes() {
@@ -445,10 +542,12 @@ function filtrarClientes() {
     const filtrados = clientes.filter(c => {
         const matchNome = c.fantasia.toLowerCase().includes(termo);
         const matchRamo = filtroRamo === "" || c.ramo === filtroRamo;
+        
         let matchStatus = true;
         if (filtroStatus !== "") {
-            matchStatus = c.statusId == filtroStatus;
+            matchStatus = calcularStatusCliente(c).id === filtroStatus;
         }
+        
         return matchNome && matchRamo && matchStatus;
     });
 
@@ -458,19 +557,24 @@ function filtrarClientes() {
     container.innerHTML = filtrados.map(c => {
         const diasDiff = c.ultimoAtendimento ? Math.floor((new Date() - new Date(c.ultimoAtendimento)) / (1000*60*60*24)) : '---';
         const lblTempo = diasDiff === '---' ? 'Sem registro' : `${diasDiff} dias s/ visita`;
-        const corTempo = (diasDiff !== '---' && diasDiff > 30) ? '#e74c3c' : '#27ae60';
+        const corTempo = (diasDiff !== '---' && diasDiff > 30) ? 'var(--danger)' : 'var(--success)';
         
+        const statusObj = calcularStatusCliente(c);
+
         return `
-        <div class="client-item" style="background:white; padding:18px; border-radius:12px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.05); border-left:5px solid #3498db;">
+        <div class="client-item" style="background:var(--card-bg); padding:18px; border-radius:16px; margin-bottom:12px; box-shadow:var(--shadow-sm); border-left:5px solid var(--info); opacity: ${c.inativo ? '0.6' : '1'}; border-right: 1px solid var(--border-color); border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <strong style="font-size:1.1rem; color:#2c3e50;">${c.fantasia}</strong>
-                    <button style="background:none; border:none; color:#95a5a6; margin-left:5px; cursor:pointer;" onclick="abrirModalEditarCliente(${c.id})" title="Editar"><i class="fa-solid fa-pen"></i></button><br>
-                    <div style="font-size:0.8rem; color:#7f8c8d; margin-top:5px;">
+                    <strong style="font-size:1.1rem; color:var(--primary);">${c.fantasia}</strong>
+                    <button style="background:none; border:none; color:var(--text-muted); margin-left:5px; cursor:pointer;" onclick="abrirModalEditarCliente(${c.id})" title="Editar"><i class="fa-solid fa-pen"></i></button><br>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:5px;">
                         <i class="fa-solid fa-briefcase"></i> ${c.ramo || 'Geral'} | <i class="fa-solid fa-city"></i> ${c.cidade || 'N/A'}
                     </div>
-                    <div style="font-size:0.75rem; font-weight:bold; color:${corTempo}; margin-top:8px;">
-                        <i class="fa-solid fa-clock-rotate-left"></i> ${lblTempo}
+                    <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:0.75rem; font-weight:bold; color:${corTempo};">
+                            <i class="fa-solid fa-clock-rotate-left"></i> ${lblTempo}
+                        </span>
+                        <span class="status-chip ${statusObj.classe}" style="margin:0; font-size:0.6rem;">${statusObj.nome}</span>
                     </div>
                 </div>
                 <button class="btn-outline" onclick="verHistoricoCliente(${c.id})">
@@ -482,29 +586,19 @@ function filtrarClientes() {
     }).join('');
 
     if (filtrados.length === 0) {
-        container.innerHTML = '<p style="text-align:center; padding:20px; color:#999;">Nenhum cliente encontrado.</p>';
+        container.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-muted);">Nenhum cliente encontrado.</p>';
     }
 }
 
-// --- CONFIGURAÇÕES: RENDERIZAR LISTAS VISÍVEIS ---
+// --- CONFIGURAÇÕES: RENDERIZAR APENAS RAMOS ---
 
 function renderListasConfig() {
     const contRamos = document.getElementById('listaRamosConfig');
     if (contRamos) {
         contRamos.innerHTML = ramos.map(r => `
-            <div style="display:flex; justify-content:space-between; background:#f8f9fa; padding:10px 15px; border-radius:8px; border-left:3px solid #3498db;">
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-secondary); padding:12px 15px; border-radius:12px; border-left:4px solid var(--brand-orange); color:var(--text-main); font-weight:bold;">
                 <span>${r.nome}</span>
-                <i class="fa-solid fa-trash" style="color:#e74c3c; cursor:pointer;" onclick="deletarRamo(${r.id})"></i>
-            </div>
-        `).join('');
-    }
-
-    const contCat = document.getElementById('listaCategoriasConfig');
-    if (contCat) {
-        contCat.innerHTML = categorias.map(c => `
-            <div style="display:flex; justify-content:space-between; align-items:center; background:#f8f9fa; padding:10px 15px; border-radius:8px; border-left:4px solid ${c.cor};">
-                <span>${c.nome}</span>
-                <i class="fa-solid fa-trash" style="color:#e74c3c; cursor:pointer;" onclick="deletarCategoria(${c.id})"></i>
+                <i class="fa-solid fa-trash" style="color:var(--danger); cursor:pointer; font-size: 1.1rem;" onclick="deletarRamo(${r.id})"></i>
             </div>
         `).join('');
     }
@@ -514,15 +608,6 @@ function deletarRamo(id) {
     if(confirm("Tem a certeza que deseja excluir este ramo?")) {
         ramos = ramos.filter(r => r.id !== id);
         localStorage.setItem('ceocard_ramos', JSON.stringify(ramos));
-        renderListasConfig();
-    }
-}
-
-function deletarCategoria(id) {
-    if(confirm("Excluir status? Clientes com este status ficarão 'Sem Status' no Quadro.")) {
-        categorias = categorias.filter(c => c.id !== id);
-        clientes.forEach(c => { if(c.statusId == id) c.statusId = null; });
-        saveData();
         renderListasConfig();
     }
 }
@@ -539,19 +624,7 @@ if(formRamo) {
     });
 }
 
-const formCategoria = document.getElementById('formCategoria');
-if(formCategoria) {
-    formCategoria.addEventListener('submit', function(e) {
-        e.preventDefault();
-        categorias.push({ id: Date.now(), nome: document.getElementById('catNome').value, cor: document.getElementById('catCor').value });
-        localStorage.setItem('ceocard_categorias', JSON.stringify(categorias));
-        this.reset();
-        toggleModal('modalCategoria');
-        renderListasConfig();
-    });
-}
-
-// --- AGENDAMENTO COM CÁLCULO INTELIGENTE DE CONFLITOS (ATUALIZADO) ---
+// --- AGENDAMENTO COM CÁLCULO INTELIGENTE DE CONFLITOS ---
 
 function horaParaMinutos(horaStr) {
     const partes = horaStr.split(':');
@@ -581,7 +654,6 @@ if(formAgendamento) {
                 const inicioExistente = horaParaMinutos(ag.hora);
                 const fimExistente = inicioExistente + duracaoExistente;
 
-                // Verifica se há sobreposição de horário
                 if (inicioNovo < fimExistente && fimNovo > inicioExistente) {
                     conflitoEncontrado = ag;
                     fimDoConflitoMinutos = fimExistente;
@@ -591,14 +663,13 @@ if(formAgendamento) {
         }
         
         if (conflitoEncontrado) {
-            // Formata os minutos de volta para HH:MM
             const hDisp = Math.floor(fimDoConflitoMinutos / 60).toString().padStart(2, '0');
             const mDisp = (fimDoConflitoMinutos % 60).toString().padStart(2, '0');
             const horaDisponivel = `${hDisp}:${mDisp}`;
 
             document.getElementById('msgConflitoTexto').innerText = `Horário disponível a partir das ${horaDisponivel}`;
             document.getElementById('alertaConflito').style.display = 'block';
-            return; // Impede o cadastro e para a execução
+            return;
         } else {
             document.getElementById('alertaConflito').style.display = 'none';
         }
@@ -615,8 +686,16 @@ if(formAgendamento) {
         toggleModal('modalAgendamento'); 
         this.reset();
         
+        // Renderiza automaticamente dependendo de onde o utilizador estiver
         if(document.getElementById('timeline-view').style.display === 'flex') {
+            // Se agendou para um dia diferente do que está a ver, muda o filtro para esse dia
+            if (dataFiltroAtual !== dataSelecionada) {
+                dataFiltroAtual = dataSelecionada;
+                gerarDateStrip();
+            }
             renderTimeline();
+        } else if(document.getElementById('dashboard-view').style.display === 'flex') {
+            renderBoard(); 
         }
     });
 }
@@ -630,17 +709,16 @@ function popularSelectRamos() {
 
 function popularSelectClientes() {
     const sel = document.getElementById('ageCliente');
-    if (sel) sel.innerHTML = '<option value="">Selecionar Cliente...</option>' + clientes.map(c => `<option value="${c.id}">${c.fantasia}</option>`).join('');
-}
-
-function popularStatusFinal() {
-    const sel = document.getElementById('atendStatusFinal');
-    if (sel) sel.innerHTML = categorias.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+    const clientesAtivos = clientes.filter(c => !c.inativo);
+    if (sel) sel.innerHTML = '<option value="">Selecionar Cliente...</option>' + clientesAtivos.map(c => `<option value="${c.id}">${c.fantasia}</option>`).join('');
 }
 
 function saveData() {
     localStorage.setItem('ceocard_clientes', JSON.stringify(clientes));
-    localStorage.setItem('ceocard_categorias', JSON.stringify(categorias));
 }
 
-window.onload = () => switchView('timeline');
+// INICIALIZAÇÃO DA APLICAÇÃO
+window.onload = () => {
+    initTheme(); 
+    switchView('timeline'); 
+};
