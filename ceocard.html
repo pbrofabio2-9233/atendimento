@@ -3,50 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeoCard - CRM v3.3.2</title>
+    <title>CeoCard - CRM v3.6.1</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="c-style.css">
-    <style>
-        /* CORREÇÃO DO "X" (PONTO 4) */
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            position: relative;
-        }
-        .modal-header .close {
-            cursor: pointer;
-            font-size: 1.8rem;
-            color: #b2bec3;
-            line-height: 1;
-        }
-
-        /* AJUSTES DE VISIBILIDADE PARA CADASTROS E DASHBOARD (PONTOS 1 E 2) */
-        .container { 
-            display: none; 
-            width: 100%; 
-            padding: 15px; 
-            flex-direction: column; 
-            min-height: calc(100vh - 150px);
-        }
-        .config-list { display: flex; flex-direction: column; gap: 15px; width: 100%; }
-        
-        /* DASHBOARD GRID v3.1 INTEGRAL */
-        .dash-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            width: 100%;
-            margin-bottom: 20px;
-        }
-    </style>
 </head>
 <body>
 
 <header>
     <h1>CeoCard</h1>
-    <h2 id="page-subtitle" style="font-size: 0.85rem; color: #bdc3c7; margin: 5px 0 0 0; font-weight: normal;">Agenda</h2>
+    <h2 id="page-subtitle">Agenda</h2>
 </header>
 
 <main id="content-area">
@@ -55,80 +20,113 @@
     </div>
 
     <div id="dashboard-view" class="container">
-        <div class="dash-grid">
+        
+        <div style="margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+            <h3 style="margin: 0; color: #2c3e50; font-size: 1.1rem;"><i class="fa-solid fa-chart-pie" style="color: #3498db;"></i> Visão Geral Mensal</h3>
+        </div>
+
+        <div class="dash-grid" style="width: 100%;">
             <div class="dash-card"><i class="fa-solid fa-person-walking"></i><span id="stat-visitas">0</span><label>Visitas</label></div>
             <div class="dash-card"><i class="fa-solid fa-clock"></i><span id="stat-horas">0h</span><label>Horas</label></div>
             <div class="dash-card"><i class="fa-solid fa-check-double"></i><span id="stat-resolvidos">0</span><label>Resolvidos</label></div>
             <div class="dash-card"><i class="fa-solid fa-user-slash"></i><span id="stat-pendentes" style="color:#e74c3c;">0</span><label>Pendentes</label></div>
         </div>
         
-        <div class="dash-card" style="width: 100%; margin-bottom: 20px;">
-            <label id="eficiencia-label">Eficiência Mensal</label>
-            <div id="eficiencia-bar" style="width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin-top: 8px;">
+        <div class="dash-card" style="width: 100%; margin: 15px 0;">
+            <label id="eficiencia-label" style="font-weight: bold; color: #2c3e50;">Eficiência Mensal</label>
+            <div id="eficiencia-bar" style="width: 100%; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; margin-top: 8px;">
                 <div id="eficiencia-fill" style="width: 0%; height: 100%; background: #2ecc71;"></div>
             </div>
         </div>
 
-        <div id="board-container-inner" style="width: 100%; display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px;">
-            </div>
+        <div style="margin-top: 10px; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+            <h3 style="margin: 0; color: #2c3e50; font-size: 1.1rem;"><i class="fa-solid fa-table-columns" style="color: #3498db;"></i> Quadro Operacional</h3>
+        </div>
+
+        <div id="board-container-inner" style="width: 100%; display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px;"></div>
     </div>
 
     <div id="clientes-view" class="container">
-        <div class="search-container">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="searchClient" placeholder="Filtrar clientes..." oninput="filtrarClientes()">
+        <div class="search-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; width: 100%;">
+            <div style="position: relative; width: 100%;">
+                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 15px; top: 15px; color: #95a5a6;"></i>
+                <input type="text" id="searchClient" placeholder="Filtrar por nome..." oninput="filtrarClientes()" style="padding-left: 40px; width: 100%;">
+            </div>
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <select id="filterRamo" onchange="filtrarClientes()" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #2c3e50;">
+                    <option value="">Todos os Ramos</option>
+                </select>
+                <select id="filterStatus" onchange="filtrarClientes()" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #2c3e50;">
+                    <option value="">Todos os Status</option>
+                </select>
+            </div>
         </div>
-        <div id="clientsList" class="clients-grid"></div>
+        <div id="clientsList" class="clients-grid" style="width: 100%;"></div>
     </div>
 
     <div id="config-view" class="container">
-        <div class="config-list">
-            <div class="config-item" onclick="toggleModal('modalCliente')">
-                <i class="fa-solid fa-user-plus"></i>
-                <div><strong>Gerir Clientes</strong><br><small>Cadastro completo com endereços</small></div>
+        <button class="btn-save" style="width: 100%; margin-bottom: 20px; background: #2c3e50;" onclick="abrirModalNovoCliente()">
+            <i class="fa-solid fa-user-plus"></i> Cadastrar Novo Cliente
+        </button>
+
+        <div class="config-list" style="gap: 20px;">
+            
+            <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <strong style="color: #2c3e50; font-size: 1.1rem;"><i class="fa-solid fa-briefcase" style="color: #3498db; margin-right: 5px;"></i> Ramos Ativos</strong>
+                    <button class="btn-outline" style="padding: 5px 10px; border-color: #2ecc71; color: #2ecc71;" onclick="toggleModal('modalRamo')"><i class="fa-solid fa-plus"></i> Novo</button>
+                </div>
+                <div id="listaRamosConfig" style="display: flex; flex-direction: column; gap: 8px;">
+                    </div>
             </div>
-            <div class="config-item" onclick="toggleModal('modalRamo')">
-                <i class="fa-solid fa-briefcase"></i>
-                <div><strong>Ramos de Atividade</strong><br><small>Segmentação de mercado</small></div>
+
+            <div style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <strong style="color: #2c3e50; font-size: 1.1rem;"><i class="fa-solid fa-sliders" style="color: #3498db; margin-right: 5px;"></i> Status do Quadro</strong>
+                    <button class="btn-outline" style="padding: 5px 10px; border-color: #2ecc71; color: #2ecc71;" onclick="toggleModal('modalCategoria')"><i class="fa-solid fa-plus"></i> Novo</button>
+                </div>
+                <div id="listaCategoriasConfig" style="display: flex; flex-direction: column; gap: 8px;">
+                    </div>
             </div>
-            <div class="config-item" onclick="toggleModal('modalCategoria')">
-                <i class="fa-solid fa-sliders"></i>
-                <div><strong>Status do Quadro</strong><br><small>Configurar colunas</small></div>
+
+            <div class="backup-section" style="background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-top: 0; border: none;">
+                <label style="font-weight: bold; font-size: 0.9rem; color: #2c3e50; display: block; margin-bottom: 10px;"><i class="fa-solid fa-shield-halved" style="color: #e67e22; margin-right: 5px;"></i> Segurança de Dados</label>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-save" style="flex: 1; background: #8e44ad;" onclick="exportarDados()">
+                        <i class="fa-solid fa-file-export"></i> Exportar
+                    </button>
+                    <label class="btn-save" style="flex: 1; background: #2c3e50; text-align: center; cursor: pointer;">
+                        <i class="fa-solid fa-file-import"></i> Importar
+                        <input type="file" id="importFile" style="display: none;" onchange="importarDados(event)">
+                    </label>
+                </div>
+                <p style="font-size: 0.65rem; color: #999; margin-top: 8px; text-align: center;">* Exporte regularmente para garantir a segurança dos dados.</p>
             </div>
         </div>
     </div>
 </main>
 
 <nav class="bottom-nav">
-    <button onclick="switchView('timeline')" class="nav-item active" id="btn-nav-timeline">
-        <i class="fa-solid fa-calendar-days"></i><span>Agenda</span>
-    </button>
-    <button onclick="switchView('dashboard')" class="nav-item" id="btn-nav-dashboard">
-        <i class="fa-solid fa-chart-line"></i><span>Dash</span>
-    </button>
-    <button onclick="toggleModal('modalAgendamento')" class="nav-item central">
-        <i class="fa-solid fa-plus-circle"></i>
-    </button>
-    <button onclick="switchView('clientes')" class="nav-item" id="btn-nav-clientes">
-        <i class="fa-solid fa-users"></i><span>Clientes</span>
-    </button>
-    <button onclick="switchView('config')" class="nav-item" id="btn-nav-config">
-        <i class="fa-solid fa-gears"></i><span>Cadastros</span>
-    </button>
+    <button onclick="switchView('timeline')" class="nav-item active" id="btn-nav-timeline"><i class="fa-solid fa-calendar-days"></i><span>Agenda</span></button>
+    <button onclick="switchView('dashboard')" class="nav-item" id="btn-nav-dashboard"><i class="fa-solid fa-chart-line"></i><span>Dash</span></button>
+    <button onclick="toggleModal('modalAgendamento')" class="nav-item central"><i class="fa-solid fa-plus-circle"></i></button>
+    <button onclick="switchView('clientes')" class="nav-item" id="btn-nav-clientes"><i class="fa-solid fa-users"></i><span>Clientes</span></button>
+    <button onclick="switchView('config')" class="nav-item" id="btn-nav-config"><i class="fa-solid fa-gears"></i><span>Cadastros</span></button>
 </nav>
 
 <div id="modalCliente" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fa-solid fa-user-plus"></i> Novo Cliente</h2>
+            <h2 id="modalClienteTitulo">Novo Cliente</h2>
             <span class="close" onclick="toggleModal('modalCliente')">&times;</span>
         </div>
         <form id="formCliente" class="grid-form">
-            <input type="text" id="cliCodigo" placeholder="Cód" required>
+            <input type="hidden" id="cliId">
+            <input type="text" id="cliCodigo" placeholder="Código" required>
             <input type="text" id="cliRazao" placeholder="Razão Social">
             <input type="text" id="cliFantasia" placeholder="Nome Fantasia" required>
             <select id="cliRamo" required><option value="">Selecione o Ramo</option></select>
-            <input type="text" id="cliRua" placeholder="Logradouro/Rua" class="full-width">
+            <input type="text" id="cliRua" placeholder="Rua" class="full-width">
             <input type="text" id="cliNumero" placeholder="Nº">
             <input type="text" id="cliBairro" placeholder="Bairro">
             <input type="text" id="cliCidade" placeholder="Cidade">
@@ -141,10 +139,6 @@
     </div>
 </div>
 
-<div id="modalRamo" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Ramos</h2><span class="close" onclick="toggleModal('modalRamo')">&times;</span></div><form id="formRamo"><input type="text" id="ramoNome" required><button type="submit" class="btn-save" style="width:100%; margin-top:10px;">Adicionar</button></form><div id="listaRamosUI"></div></div></div>
-<div id="modalCategoria" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Colunas</h2><span class="close" onclick="toggleModal('modalCategoria')">&times;</span></div><form id="formCategoria"><input type="text" id="catNome" required><input type="color" id="catCor" value="#0079bf"><button type="submit" class="btn-save" style="width:100%; margin-top:10px;">Add</button></form><div id="listaCategoriasUI"></div></div></div>
-<div id="modalAgendamento" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Agendar</h2><span class="close" onclick="toggleModal('modalAgendamento')">&times;</span></div><form id="formAgendamento" class="grid-form"><select id="ageCliente" class="full-width" required></select><input type="date" id="ageData" required><input type="time" id="ageHora" required><select id="ageTipo" class="full-width"><option value="Visita">Visita</option><option value="Reunião">Reunião</option></select><button type="submit" class="btn-save full-width">Agendar</button></form></div></div>
-
 <div id="modalAtendimento" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
@@ -153,15 +147,15 @@
             <span class="close" onclick="toggleModal('modalAtendimento')">&times;</span>
         </div>
         <div class="atendimento-body">
-            <div id="atendTimer" class="timer-display" style="font-size: 2.5rem; text-align: center; font-weight: bold; margin: 15px 0;">00:00:00</div>
+            <div id="atendTimer" class="timer-display">00:00:00</div>
             <div id="areaBotoesAtendimento" style="display: flex; gap: 10px;">
-                <button id="btnCheckIn" class="btn-checkin" onclick="realizarCheckIn()" style="flex: 1; background: #27ae60; color: white; border: none; padding: 10px; border-radius: 5px;">Check-in</button>
-                <button id="btnCheckOut" class="btn-checkout" onclick="realizarCheckOut()" disabled style="flex: 1; background: #e74c3c; color: white; border: none; padding: 10px; border-radius: 5px;">Check-out</button>
+                <button id="btnCheckIn" class="btn-checkin" onclick="realizarCheckIn()" style="flex: 1;">Check-in</button>
+                <button id="btnCheckOut" class="btn-checkout" onclick="realizarCheckOut()" disabled style="flex: 1;">Check-out</button>
             </div>
             <label style="font-size: 0.8rem; margin-top: 10px; display: block;">Relatório da Visita:</label>
             <textarea id="atendRelatorio" class="full-width" rows="4"></textarea>
             <div id="atendConfigExtras">
-                <label style="font-size: 0.8rem; margin-top: 10px; display: block;">Status do Quadro após Checkout:</label>
+                <label style="font-size: 0.8rem; margin-top: 10px; display: block;">Status do Quadro (após checkout):</label>
                 <select id="atendStatusFinal" class="full-width"></select>
                 <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 15px;">
                     <label style="font-weight: bold; font-size: 0.8rem;">Próximo Agendamento:</label>
@@ -169,11 +163,50 @@
                 </div>
             </div>
             <div id="areaObservacaoPos" style="display:none; margin-top: 15px; border-top: 2px dashed #eee; padding-top: 10px;">
-                <label style="font-size: 0.8rem; display: block;">Notas Adicionais:</label>
+                <label style="font-size: 0.8rem; display: block;">Nota Adicional (Apenas leitura):</label>
                 <textarea id="atendObsPos" class="full-width" rows="3"></textarea>
                 <button class="btn-save" style="width:100%; margin-top:10px; background:#2980b9;" onclick="salvarObservacaoPos()">Guardar Nota</button>
             </div>
         </div>
+    </div>
+</div>
+
+<div id="modalHistorico" class="modal-overlay">
+    <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h2 id="histClienteNome">Histórico</h2>
+            <span class="close" onclick="toggleModal('modalHistorico')">&times;</span>
+        </div>
+        <div id="histLista" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<div id="modalRamo" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Novo Ramo</h2><span class="close" onclick="toggleModal('modalRamo')">&times;</span></div><form id="formRamo"><input type="text" id="ramoNome" placeholder="Ex: Farmácia" required><button type="submit" class="btn-save" style="width:100%; margin-top:10px;">Salvar Ramo</button></form></div></div>
+<div id="modalCategoria" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Novo Status</h2><span class="close" onclick="toggleModal('modalCategoria')">&times;</span></div><form id="formCategoria"><input type="text" id="catNome" placeholder="Ex: Em Negociação" required><input type="color" id="catCor" value="#0079bf" style="height: 40px; padding: 2px;"><button type="submit" class="btn-save" style="width:100%; margin-top:10px;">Salvar Status</button></form></div></div>
+
+<div id="modalAgendamento" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Novo Agendamento</h2>
+            <span class="close" onclick="toggleModal('modalAgendamento')">&times;</span>
+        </div>
+        
+        <div id="alertaConflito" style="display:none; background:#f8d7da; color:#721c24; padding:12px; border-radius:8px; margin-bottom:15px; font-size:0.85rem; text-align:center; border: 1px solid #f5c6cb;">
+            <i class="fa-solid fa-triangle-exclamation"></i> <strong id="msgConflitoTitulo">Conflito de Horário!</strong><br>
+            <span id="msgConflitoTexto">Já existe um compromisso próximo a este horário.</span>
+        </div>
+
+        <form id="formAgendamento" class="grid-form">
+            <select id="ageCliente" class="full-width" required></select>
+            <input type="date" id="ageData" required>
+            <input type="time" id="ageHora" required>
+            <select id="ageTipo" class="full-width">
+                <option value="Visita de Rotina">Visita de Rotina</option>
+                <option value="Urgência">Urgência</option>
+                <option value="Reunião">Reunião</option>
+            </select>
+            <button type="submit" class="btn-save full-width">Agendar</button>
+        </form>
     </div>
 </div>
 
