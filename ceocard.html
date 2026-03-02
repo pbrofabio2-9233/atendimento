@@ -291,5 +291,16 @@
 </div>
 
 <script src="c-script.js?v=4.1.0"></script>
+    <script>
+        // Regista o Service Worker para tornar o App Instalável (PWA)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('PWA: Service Worker registado com sucesso!', reg))
+                    .catch(err => console.error('PWA: Erro ao registar o Service Worker:', err));
+            });
+        }
+    </script>
+
 </body>
 </html>
