@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CeoCard - CRM v3.8.2</title>
+    <title>CeoCard - CRM v4.1.0</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="c-style.css">
 </head>
@@ -23,7 +23,6 @@
 
 <main id="content-area">
     <div id="timeline-view" class="container" style="display:flex;">
-        
         <div id="dailyBriefing" class="briefing-card" style="display: none;">
             <div class="briefing-icon"><i class="fa-solid fa-bell"></i></div>
             <div class="briefing-content">
@@ -32,8 +31,7 @@
             </div>
         </div>
 
-        <div id="dateStripContainer" class="date-strip-container">
-            </div>
+        <div id="dateStripContainer" class="date-strip-container"></div>
 
         <div class="agenda-filters" style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; margin-bottom: 15px; scrollbar-width: none;">
             <button class="chip-filter active" onclick="filtrarAgenda('todas')">Todas</button>
@@ -82,7 +80,7 @@
                     <option value="">Todos os Ramos</option>
                 </select>
                 <select id="filterStatus" onchange="filtrarClientes()" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color, #ddd); background: var(--card-bg, #fff); color: var(--text-main, #2c3e50);">
-                    </select>
+                </select>
             </div>
         </div>
         <div id="clientsList" class="clients-grid" style="width: 100%;"></div>
@@ -94,7 +92,6 @@
         </button>
 
         <div class="config-list" style="gap: 20px;">
-            
             <div style="background: var(--card-bg, white); border-radius: 12px; padding: 15px; box-shadow: var(--shadow-soft); display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-color);">
                 <div>
                     <strong style="color: var(--primary); font-size: 1.1rem;"><i class="fa-solid fa-moon" style="color: #f1c40f; margin-right: 5px;"></i> Modo Escuro</strong>
@@ -111,8 +108,7 @@
                     <strong style="color: var(--primary); font-size: 1.1rem;"><i class="fa-solid fa-briefcase" style="color: var(--brand-orange); margin-right: 5px;"></i> Ramos Ativos</strong>
                     <button class="btn-outline" style="padding: 5px 10px; border-color: var(--success, #2ecc71); color: var(--success, #2ecc71);" onclick="toggleModal('modalRamo')"><i class="fa-solid fa-plus"></i> Novo</button>
                 </div>
-                <div id="listaRamosConfig" style="display: flex; flex-direction: column; gap: 8px;">
-                    </div>
+                <div id="listaRamosConfig" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
 
             <div class="backup-section" style="background: var(--card-bg, white); border-radius: 12px; padding: 15px; box-shadow: var(--shadow-soft); border: 1px solid var(--border-color); margin-top: 0;">
@@ -184,9 +180,19 @@
                 <button id="btnCheckIn" class="btn-checkin" onclick="realizarCheckIn()" style="flex: 1;">Check-in</button>
                 <button id="btnCheckOut" class="btn-checkout" onclick="realizarCheckOut()" disabled style="flex: 1;">Check-out</button>
             </div>
+            
             <label style="font-size: 0.8rem; margin-top: 10px; display: block; color: var(--text-main);">Relatório da Visita:</label>
             <textarea id="atendRelatorio" class="full-width" rows="4"></textarea>
             
+            <div id="areaAnexosUpload" style="margin-top: 15px; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; background: var(--bg-secondary);">
+                <label style="font-size: 0.8rem; display: block; color: var(--primary); font-weight: bold; margin-bottom: 8px;"><i class="fa-solid fa-paperclip"></i> Evidências (Fotos/Docs):</label>
+                <input type="file" id="atendAnexosInput" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display: none;" onchange="processarAnexosSelecionados()">
+                <button type="button" id="btnSelecionarAnexos" class="btn-outline full-width" style="border-style: dashed; padding: 10px;" onclick="document.getElementById('atendAnexosInput').click()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Adicionar Anexos
+                </button>
+                <div id="listaAnexosUI" style="margin-top: 10px; display: flex; flex-direction: column; gap: 5px;"></div>
+            </div>
+
             <div id="atendConfigExtras">
                 <div style="background: var(--bg-secondary, #f8f9fa); padding: 10px; border-radius: 8px; margin-top: 15px; border: 1px solid var(--border-color);">
                     <label style="font-weight: bold; font-size: 0.8rem; color: var(--primary);">Próximo Agendamento (Opcional):</label>
@@ -203,7 +209,7 @@
             </div>
             
             <div id="areaObservacaoPos" style="display:none; margin-top: 15px; border-top: 2px dashed var(--border-color, #eee); padding-top: 10px;">
-                <label style="font-size: 0.8rem; display: block; color: var(--text-main);">Nota Adicional (Apenas leitura):</label>
+                <label style="font-size: 0.8rem; display: block; color: var(--text-main);">Nota Adicional Pós-Visita:</label>
                 <textarea id="atendObsPos" class="full-width" rows="3"></textarea>
                 <button class="btn-save" style="width:100%; margin-top:10px; background: var(--brand-orange);" onclick="salvarObservacaoPos()">Guardar Nota</button>
             </div>
@@ -212,16 +218,49 @@
 </div>
 
 <div id="modalHistorico" class="modal-overlay">
-    <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
-        <div class="modal-header">
+    <div class="modal-content" style="max-height: 85vh; overflow-y: auto;">
+        <div class="modal-header" style="margin-bottom: 5px;">
             <h2 id="histClienteNome">Histórico</h2>
             <span class="close" onclick="toggleModal('modalHistorico')">&times;</span>
         </div>
-        <div id="histLista" style="margin-top: 15px;"></div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; background: var(--bg-secondary); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <input type="month" id="filtroHistMes" class="full-width" style="flex: 1; padding: 8px; font-size: 0.85rem;" onchange="filtrarEVisualizarHistorico()">
+            <select id="filtroHistTipo" style="flex: 1; padding: 8px; font-size: 0.85rem;" onchange="filtrarEVisualizarHistorico()">
+                <option value="">Todos os Tipos</option>
+                <option value="Visita de Rotina">Visita</option>
+                <option value="Urgência">Urgência</option>
+                <option value="Reunião">Reunião</option>
+            </select>
+        </div>
+
+        <div id="histLista" style="margin-top: 5px;"></div>
     </div>
 </div>
 
-<div id="modalRamo" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Novo Ramo</h2><span class="close" onclick="toggleModal('modalRamo')">&times;</span></div><form id="formRamo"><input type="text" id="ramoNome" placeholder="Ex: Farmácia" required><button type="submit" class="btn-save" style="width:100%; margin-top:10px; background: var(--brand-orange);">Salvar Ramo</button></form></div></div>
+<div id="modalDetalheAtendimento" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Resumo da Visita</h2>
+            <span class="close" onclick="toggleModal('modalDetalheAtendimento')">&times;</span>
+        </div>
+        <div id="detalheAtendimentoBody" style="margin-top: 10px; display: flex; flex-direction: column; gap: 15px;">
+            </div>
+    </div>
+</div>
+
+<div id="modalRamo" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Novo Ramo</h2>
+            <span class="close" onclick="toggleModal('modalRamo')">&times;</span>
+        </div>
+        <form id="formRamo">
+            <input type="text" id="ramoNome" placeholder="Ex: Farmácia" required>
+            <button type="submit" class="btn-save" style="width:100%; margin-top:10px; background: var(--brand-orange);">Salvar Ramo</button>
+        </form>
+    </div>
+</div>
 
 <div id="modalAgendamento" class="modal-overlay">
     <div class="modal-content">
@@ -249,7 +288,6 @@
     </div>
 </div>
 
-<script src="c-script.js?v=final"></script>
-
+<script src="c-script.js?v=4.1.0"></script>
 </body>
 </html>
