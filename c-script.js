@@ -1,8 +1,8 @@
 // ==========================================
-// CEOCARD - VERSÃO DEFINITIVA UNIFICADA
+// CEOCARD v4.1.0 - VERSÃO ESTÁVEL + HISTÓRICO AVANÇADO E ANEXOS
 // ==========================================
 
-// 1. VARIÁVEIS GLOBAIS (Declaradas apenas UMA vez!)
+// --- 1. VARIÁVEIS GLOBAIS ---
 let clientes = JSON.parse(localStorage.getItem('ceocard_clientes')) || [];
 let agendamentos = JSON.parse(localStorage.getItem('ceocard_agenda')) || [];
 let ramos = JSON.parse(localStorage.getItem('ceocard_ramos')) || [{ id: 1, nome: 'Geral' }];
@@ -10,8 +10,11 @@ let historico = JSON.parse(localStorage.getItem('ceocard_historico')) || [];
 let atendimentoAtivo = null;
 let timerInterval = null;
 
+// Novas variáveis para a v4.1.0
 let filtroAgendaTipo = 'todas';
 let dataFiltroAtual = getLocalISODate(new Date());
+let anexosTemporarios = []; // Guarda os ficheiros antes do Check-out
+let clienteHistoricoAtivo = null; // Sabe qual cliente está aberto no modal de histórico
 
 const STATUS_FIXOS = [
     { id: 'sem_registro', nome: 'Sem Registro', classe: 'bg-sem-registro' },
@@ -24,7 +27,7 @@ const STATUS_FIXOS = [
     { id: 'inativo', nome: 'Cliente Inativo', classe: 'bg-inativo' }
 ];
 
-// 2. UTILITÁRIOS
+// --- 2. UTILITÁRIOS ---
 function saveData() {
     localStorage.setItem('ceocard_clientes', JSON.stringify(clientes));
     localStorage.setItem('ceocard_agenda', JSON.stringify(agendamentos));
@@ -42,7 +45,7 @@ function getNomeDiaCurto(date) {
     return dias[date.getDay()];
 }
 
-// 3. TEMA E NAVEGAÇÃO
+// --- 3. TEMA E NAVEGAÇÃO ---
 function initTheme() {
     const isDark = localStorage.getItem('ceocard_theme') === 'dark';
     document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -50,13 +53,13 @@ function initTheme() {
     if (toggle) toggle.checked = isDark;
 }
 
-function toggleDarkMode() {
+window.toggleDarkMode = function() {
     const isDark = document.getElementById('darkModeToggle').checked;
     document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
     localStorage.setItem('ceocard_theme', isDark ? 'dark' : 'light');
-}
+};
 
-function switchView(view) {
+window.switchView = function(view) {
     const views = ['timeline-view', 'dashboard-view', 'clientes-view', 'config-view'];
     const titles = { 'timeline': 'Agenda', 'dashboard': 'Visão Geral', 'clientes': 'Clientes', 'config': 'Ajustes' };
     
@@ -76,23 +79,23 @@ function switchView(view) {
     if (view === 'dashboard') { renderDashboard(); renderBoard(); }
     if (view === 'clientes') { popularFiltrosClientes(); filtrarClientes(); }
     if (view === 'config') { renderListasConfig(); }
-}
+};
 
-function toggleModal(modalId) {
+window.toggleModal = function(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     const isVis = modal.style.display === "flex";
     modal.style.display = isVis ? "none" : "flex";
 
-    // Gatilhos de Abertura Seguros
+    // Gatilhos Seguros de Abertura
     if (!isVis) {
-        // Popula os clientes na agenda, mas DEIXA OS RAMOS EM PAZ
-        // (Os ramos já são preenchidos corretamente pelas funções de Novo/Editar)
+        // Apenas popula clientes na agenda. 
+        // OS RAMOS AGORA SÃO PROTEGIDOS (Populam apenas no Novo/Editar antes de abrir)
         if (modalId === 'modalAgendamento') popularSelectClientes();
     }
-}
+};
 
-// 4. MOTOR INTELIGENTE (STATUS E DASHBOARD)
+// --- 4. MOTOR INTELIGENTE E DASHBOARD ---
 function calcularStatusCliente(cliente) {
     if (!cliente) return STATUS_FIXOS[0];
     if (cliente.inativo) return STATUS_FIXOS.find(s => s.id === 'inativo');
@@ -173,7 +176,7 @@ function renderBoard() {
     });
 }
 
-// 5. GESTÃO DE CLIENTES E RAMOS (CORRIGIDO)
+// --- 5. GESTÃO DE CLIENTES ---
 function popularSelectRamos() {
     const sel = document.getElementById('cliRamo');
     const fil = document.getElementById('filterRamo');
@@ -196,7 +199,7 @@ function popularFiltrosClientes() {
     if (sStatus) sStatus.innerHTML = '<option value="">Todos os Status</option>' + STATUS_FIXOS.map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
 }
 
-function filtrarClientes() {
+window.filtrarClientes = function() {
     const termo = (document.getElementById('searchClient')?.value || "").toLowerCase();
     const fRamo = document.getElementById('filterRamo')?.value || "";
     const fStatus = document.getElementById('filterStatus')?.value || "";
@@ -226,25 +229,22 @@ function filtrarClientes() {
             </div>
         </div>`;
     }).join('');
-}
+};
 
-function abrirModalNovoCliente() {
+window.abrirModalNovoCliente = function() {
     const f = document.getElementById('formCliente');
     if (f) f.reset();
     document.getElementById('cliId').value = '';
     document.getElementById('modalClienteTitulo').innerText = 'Novo Cliente';
     popularSelectRamos();
     toggleModal('modalCliente');
-}
+};
 
-function abrirModalEditarCliente(id) {
+window.abrirModalEditarCliente = function(id) {
     const c = clientes.find(cli => cli.id == id);
     if (!c) return;
     
-    // REDE DE SEGURANÇA: Popula ramos PRIMEIRO
     popularSelectRamos();
-    
-    // Se o ramo guardado não existir mais na lista global, recria-o temporariamente
     const selRamo = document.getElementById('cliRamo');
     if (c.ramo && !ramos.some(r => r.nome === c.ramo)) {
         const opt = document.createElement('option');
@@ -258,10 +258,7 @@ function abrirModalEditarCliente(id) {
     document.getElementById('cliRazao').value = c.razao || '';
     document.getElementById('cliFantasia').value = c.fantasia || '';
     document.getElementById('cliInativo').checked = !!c.inativo;
-    
-    // AGORA SIM, DEFINE O VALOR:
     selRamo.value = c.ramo || ''; 
-    
     document.getElementById('cliRua').value = c.rua || '';
     document.getElementById('cliNumero').value = c.numero || '';
     document.getElementById('cliBairro').value = c.bairro || '';
@@ -273,39 +270,108 @@ function abrirModalEditarCliente(id) {
 
     document.getElementById('modalClienteTitulo').innerText = 'Editar Cliente';
     toggleModal('modalCliente');
-}
+};
 
-function verHistoricoCliente(id) {
+// --- 6. NOVO HISTÓRICO AVANÇADO ---
+window.verHistoricoCliente = function(id) {
     const c = clientes.find(cli => cli.id == id);
     if (!c) return;
+    
+    clienteHistoricoAtivo = id;
     const tit = document.getElementById('histClienteNome');
     if (tit) tit.innerText = `Histórico: ${c.fantasia}`;
+    
+    // Define o filtro do mês automaticamente para o mês atual
+    const inputMes = document.getElementById('filtroHistMes');
+    const hoje = new Date();
+    if(inputMes) inputMes.value = `${hoje.getFullYear()}-${(hoje.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    const inputTipo = document.getElementById('filtroHistTipo');
+    if(inputTipo) inputTipo.value = ""; // Limpa o tipo
+
+    filtrarEVisualizarHistorico();
+    toggleModal('modalHistorico');
+};
+
+window.filtrarEVisualizarHistorico = function() {
+    if(!clienteHistoricoAtivo) return;
     const cont = document.getElementById('histLista');
     if (!cont) return;
 
-    const lista = historico.filter(h => h.clienteId == id).sort((a, b) => new Date(b.dataFim) - new Date(a.dataFim));
-    
+    const mesStr = document.getElementById('filtroHistMes')?.value; // Formato "YYYY-MM"
+    const tipoStr = document.getElementById('filtroHistTipo')?.value;
+
+    let lista = historico.filter(h => h.clienteId == clienteHistoricoAtivo);
+
+    // Filtro por Mês/Ano
+    if (mesStr) {
+        const [anoFiltro, mesFiltro] = mesStr.split('-');
+        lista = lista.filter(h => {
+            if(!h.dataFim) return false;
+            const d = new Date(h.dataFim);
+            return d.getFullYear() == anoFiltro && (d.getMonth() + 1).toString().padStart(2, '0') == mesFiltro;
+        });
+    }
+
+    // Filtro por Tipo
+    if (tipoStr) {
+        lista = lista.filter(h => h.tipo && h.tipo.includes(tipoStr));
+    }
+
+    lista.sort((a, b) => new Date(b.dataFim) - new Date(a.dataFim));
+
     if (lista.length === 0) {
-        cont.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-muted);">Sem registos.</p>';
+        cont.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-muted);">Sem registos para este filtro.</p>';
     } else {
         cont.innerHTML = lista.map(h => {
-            const dataF = new Date(h.dataFim).toLocaleString('pt-BR');
+            const dataF = new Date(h.dataFim).toLocaleDateString('pt-BR');
+            // Mostra ícone se tiver anexos
+            const temAnexo = h.anexos && h.anexos.length > 0 ? '<i class="fa-solid fa-paperclip" style="color:var(--info); margin-left:5px;"></i>' : '';
             return `
-            <div style="background:var(--bg-secondary); padding:15px; border-radius:12px; margin-bottom:12px; border-left:4px solid var(--brand-orange);">
-                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                    <strong style="color:var(--primary);"><i class="fa-solid fa-calendar-check" style="color:var(--brand-orange);"></i> ${dataF}</strong>
+            <div class="history-card-clickable" onclick="abrirDetalheAtendimento(${h.id})">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:var(--primary); font-size:1rem;"><i class="fa-solid fa-calendar-check" style="color:var(--brand-orange);"></i> ${dataF}</strong>
                     <span style="font-size:0.75rem; background:var(--brand-dark); color:white; padding:2px 8px; border-radius:10px;">${h.duracaoFormatada || '---'}</span>
                 </div>
-                <p style="font-size:0.85rem; margin:8px 0; color:var(--text-main);">${h.relatorio ? h.relatorio.replace(/\n/g, '<br>') : '<em>Sem relatório.</em>'}</p>
-                ${h.observacaoPos ? `<div style="margin-top:10px; border-top:1px dashed var(--border-color); padding-top:8px; font-size:0.8rem; color:var(--info);"><strong>Nota:</strong> ${h.observacaoPos.replace(/\n/g, '<br>')}</div>` : ''}
+                <div style="font-size: 0.8rem; color:var(--text-muted);">
+                    <strong>${h.tipo || 'Visita'}</strong> ${temAnexo}
+                </div>
             </div>`;
         }).join('');
     }
-    toggleModal('modalHistorico');
-}
+};
 
-// 6. AGENDA E ATENDIMENTO
-function selecionarDataFiltro(dataStr) { dataFiltroAtual = dataStr; gerarDateStrip(); renderTimeline(); }
+window.abrirDetalheAtendimento = function(idAtendimento) {
+    const h = historico.find(x => x.id == idAtendimento);
+    if(!h) return;
+    
+    const cont = document.getElementById('detalheAtendimentoBody');
+    if(!cont) return;
+
+    const dataCompleta = new Date(h.dataFim).toLocaleString('pt-BR');
+    
+    let htmlAnexos = '';
+    if(h.anexos && h.anexos.length > 0) {
+        htmlAnexos = `<div class="detalhe-section"><label><i class="fa-solid fa-paperclip"></i> Anexos Guardados</label>`;
+        h.anexos.forEach(a => {
+            htmlAnexos += `<div class="anexo-item" style="margin-top:5px; background:white;"><span><i class="fa-solid fa-file file-icon"></i> ${a.nome}</span> <small style="color:var(--text-muted);">${a.tamanho}</small></div>`;
+        });
+        htmlAnexos += `</div>`;
+    }
+
+    cont.innerHTML = `
+        <div class="detalhe-section"><label>Data da Finalização</label><span class="detalhe-valor-destaque">${dataCompleta}</span></div>
+        <div class="detalhe-section"><label>Duração e Tipo</label><span class="detalhe-valor-destaque"><i class="fa-solid fa-clock" style="color:var(--brand-orange);"></i> ${h.duracaoFormatada || '---'} | ${h.tipo || 'N/A'}</span></div>
+        <div class="detalhe-section"><label>Relatório do Técnico</label><p>${h.relatorio ? h.relatorio.replace(/\n/g, '<br>') : '<em>Sem relatório detalhado.</em>'}</p></div>
+        ${htmlAnexos}
+        ${h.observacaoPos ? `<div class="detalhe-section"><label>Nota Pós-Visita</label><p style="border-left: 3px solid var(--info);">${h.observacaoPos.replace(/\n/g, '<br>')}</p></div>` : ''}
+    `;
+    
+    toggleModal('modalDetalheAtendimento');
+};
+
+// --- 7. AGENDA E CALENDÁRIO ---
+window.selecionarDataFiltro = function(dataStr) { dataFiltroAtual = dataStr; gerarDateStrip(); renderTimeline(); };
 
 function gerarDateStrip() {
     const cont = document.getElementById('dateStripContainer');
@@ -325,12 +391,12 @@ function gerarDateStrip() {
     setTimeout(() => document.getElementById(`date-btn-${dataFiltroAtual}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 100);
 }
 
-function filtrarAgenda(tipo) {
+window.filtrarAgenda = function(tipo) {
     filtroAgendaTipo = tipo;
     document.querySelectorAll('.chip-filter').forEach(b => b.classList.remove('active'));
     if (event && event.currentTarget) event.currentTarget.classList.add('active');
     renderTimeline();
-}
+};
 
 function renderTimeline() {
     const cont = document.getElementById('timelineList');
@@ -363,7 +429,40 @@ function renderTimeline() {
         }).join('');
 }
 
-function abrirAtendimento(id) {
+// --- 8. ATENDIMENTO E ANEXOS (NOVO MOTOR) ---
+function renderizarListaAnexos() {
+    const cont = document.getElementById('listaAnexosUI');
+    if(!cont) return;
+    cont.innerHTML = anexosTemporarios.map((a, idx) => `
+        <div class="anexo-item">
+            <span><i class="fa-solid fa-file file-icon"></i> ${a.nome}</span>
+            <button type="button" onclick="removerAnexo(${idx})"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    `).join('');
+}
+
+window.processarAnexosSelecionados = function() {
+    const input = document.getElementById('atendAnexosInput');
+    if(!input.files || input.files.length === 0) return;
+    
+    for(let i = 0; i < input.files.length; i++) {
+        const f = input.files[i];
+        anexosTemporarios.push({
+            nome: f.name,
+            tamanho: (f.size / 1024).toFixed(1) + ' KB',
+            tipo: f.type
+        });
+    }
+    input.value = ''; // Reseta o input para permitir selecionar o mesmo arquivo novamente se for apagado
+    renderizarListaAnexos();
+};
+
+window.removerAnexo = function(idx) {
+    anexosTemporarios.splice(idx, 1);
+    renderizarListaAnexos();
+};
+
+window.abrirAtendimento = function(id) {
     const age = agendamentos.find(a => a.id == id);
     if (!age) return;
     atendimentoAtivo = age;
@@ -373,7 +472,26 @@ function abrirAtendimento(id) {
     const isFin = age.finalizado === true;
     document.getElementById('areaBotoesAtendimento').style.display = isFin ? 'none' : 'flex';
     document.getElementById('areaObservacaoPos').style.display = isFin ? 'block' : 'none';
-    if(isFin) document.getElementById('atendObsPos').value = age.observacaoPos || '';
+    
+    // Controle visual dos Anexos dependendo se está fechado ou aberto
+    const areaUpload = document.getElementById('areaAnexosUpload');
+    const btnSelecionar = document.getElementById('btnSelecionarAnexos');
+    
+    if(isFin) {
+        document.getElementById('atendObsPos').value = age.observacaoPos || '';
+        document.getElementById('atendRelatorio').readOnly = true;
+        btnSelecionar.style.display = 'none'; // Esconde botão de upload
+        
+        // Carrega anexos salvos para visualização (apenas leitura)
+        anexosTemporarios = age.anexos ? [...age.anexos] : [];
+        const cont = document.getElementById('listaAnexosUI');
+        cont.innerHTML = anexosTemporarios.map(a => `<div class="anexo-item" style="background:white;"><span><i class="fa-solid fa-file file-icon"></i> ${a.nome}</span></div>`).join('');
+    } else {
+        document.getElementById('atendRelatorio').readOnly = false;
+        btnSelecionar.style.display = 'block';
+        anexosTemporarios = []; // Zera a lista para novo atendimento
+        renderizarListaAnexos();
+    }
     
     document.getElementById('btnCheckIn').disabled = !!age.inicio;
     document.getElementById('btnCheckOut').disabled = !age.inicio;
@@ -381,9 +499,9 @@ function abrirAtendimento(id) {
     if (age.inicio && !age.finalizado) retomarTimer();
     else document.getElementById('atendTimer').innerText = age.duracaoFormatada || "00:00:00";
     toggleModal('modalAtendimento');
-}
+};
 
-function realizarCheckIn() {
+window.realizarCheckIn = function() {
     atendimentoAtivo.inicio = new Date().toISOString();
     const idx = agendamentos.findIndex(a => a.id === atendimentoAtivo.id);
     agendamentos[idx].inicio = atendimentoAtivo.inicio;
@@ -391,7 +509,7 @@ function realizarCheckIn() {
     document.getElementById('btnCheckIn').disabled = true;
     document.getElementById('btnCheckOut').disabled = false;
     retomarTimer();
-}
+};
 
 function retomarTimer() {
     if (timerInterval) clearInterval(timerInterval);
@@ -404,24 +522,30 @@ function retomarTimer() {
     }, 1000);
 }
 
-function realizarCheckOut() {
+window.realizarCheckOut = function() {
     clearInterval(timerInterval);
     const fim = new Date();
     const dur = Math.floor((fim - new Date(atendimentoAtivo.inicio)) / 1000);
     const idx = agendamentos.findIndex(a => a.id === atendimentoAtivo.id);
+    
     agendamentos[idx].finalizado = true;
     agendamentos[idx].duracaoSegundos = dur;
     agendamentos[idx].duracaoFormatada = document.getElementById('atendTimer').innerText;
     agendamentos[idx].relatorio = document.getElementById('atendRelatorio').value;
     agendamentos[idx].dataFim = fim.toISOString();
+    
+    // Salva os anexos da memória temporária para o registo definitivo
+    agendamentos[idx].anexos = [...anexosTemporarios]; 
+    
     historico.push({...agendamentos[idx]});
     saveData();
     atendimentoAtivo = null;
+    anexosTemporarios = []; // Limpa memória
     toggleModal('modalAtendimento');
     switchView('dashboard');
-}
+};
 
-function salvarObservacaoPos() {
+window.salvarObservacaoPos = function() {
     const obs = document.getElementById('atendObsPos').value;
     const idx = agendamentos.findIndex(a => a.id == atendimentoAtivo.id);
     if(idx !== -1) {
@@ -432,9 +556,9 @@ function salvarObservacaoPos() {
         alert("Nota guardada!");
         toggleModal('modalAtendimento');
     }
-}
+};
 
-// 7. BACKUP E LISTAS (CORREÇÃO DE ESCOPO GLOBAL)
+// --- 9. CONFIGURAÇÕES, BACKUP E INICIALIZAÇÃO ---
 function renderListasConfig() {
     const cont = document.getElementById('listaRamosConfig');
     if (cont) cont.innerHTML = ramos.map(r => `
@@ -444,13 +568,12 @@ function renderListasConfig() {
         </div>`).join('');
 }
 
-function deletarRamo(id) {
+window.deletarRamo = function(id) {
     if(confirm("Excluir ramo?")) {
         ramos = ramos.filter(r => r.id !== id);
-        saveData();
-        renderListasConfig();
+        saveData(); renderListasConfig();
     }
-}
+};
 
 window.exportarDados = function() {
     try {
@@ -458,7 +581,7 @@ window.exportarDados = function() {
         const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `ceocard_backup_final.json`;
+        a.download = `ceocard_backup_v4.1.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -482,7 +605,6 @@ window.importarDados = function(e) {
     reader.readAsText(file);
 };
 
-// 8. EVENTOS DE INICIALIZAÇÃO
 window.onload = () => {
     initTheme();
 
@@ -493,10 +615,7 @@ window.onload = () => {
             const input = document.getElementById('ramoNome');
             if (input.value.trim()) {
                 ramos.push({ id: Date.now(), nome: input.value.trim() });
-                saveData();
-                input.value = '';
-                toggleModal('modalRamo');
-                renderListasConfig();
+                saveData(); input.value = ''; toggleModal('modalRamo'); renderListasConfig();
             }
         });
     }
@@ -526,9 +645,7 @@ window.onload = () => {
                 const idx = clientes.findIndex(c => c.id == id);
                 if (idx !== -1) clientes[idx] = dados;
             } else { clientes.push(dados); }
-            saveData();
-            toggleModal('modalCliente');
-            filtrarClientes();
+            saveData(); toggleModal('modalCliente'); filtrarClientes();
         });
     }
 
