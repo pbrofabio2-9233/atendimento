@@ -1,8 +1,8 @@
 /* --- FUNDAÇÕES, IDENTIDADE VISUAL E VARIÁVEIS --- */
 :root {
     /* Identidade Oficial CeoCard */
-    --brand-orange: #FF5722; /* Laranja Vibrante da Logo */
-    --brand-dark: #212121;   /* Chumbo/Onyx da Logo */
+    --brand-orange: #FF5722; 
+    --brand-dark: #212121;   
     
     /* Cores de Sistema / Alerta */
     --accent: #27ae60;
@@ -14,7 +14,7 @@
     /* Tema Claro (Soft UI Premium) */
     --primary: #2c3e50;
     --secondary: #34495e;
-    --bg: #f7f9fa; /* Fundo mais limpo */
+    --bg: #f7f9fa; 
     --bg-secondary: #edf2f4;
     --card-bg: #ffffff;
     --text-main: #2d3436;
@@ -30,7 +30,7 @@
 
 [data-theme="dark"] {
     /* Tema Escuro Luxuoso */
-    --brand-orange: #FF6E40; /* Laranja ligeiramente mais claro para contraste */
+    --brand-orange: #FF6E40; 
     --brand-dark: #121212;
     --primary: #ecf0f1;
     --secondary: #bdc3c7;
@@ -121,8 +121,6 @@ header { background: var(--brand-dark); color: white; padding: 15px; text-align:
 
 /* --- CENTRAL DE AJUSTES E TOGGLE MODO ESCURO --- */
 .config-list { display: flex; flex-direction: column; gap: 15px; width: 100%; }
-
-/* Switch do Dark Mode */
 .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 26px; }
@@ -137,6 +135,20 @@ input:checked + .slider:before { transform: translateX(22px); }
 .timeline-body { padding: 0 18px 18px 18px; display: none; border-top: 1px solid var(--border-color); margin-top: 5px; padding-top: 15px; }
 .timeline-item.active .timeline-body { display: block; animation: fadeInScale 0.2s ease-out; }
 .history-item { background: var(--bg-secondary); padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 4px solid var(--brand-orange); color: var(--text-main); }
+
+/* --- NOVAS CLASSES (V4.1.0): ANEXOS E HISTÓRICO AVANÇADO --- */
+.anexo-item { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.8rem; box-shadow: var(--shadow-sm); }
+.anexo-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%; }
+.anexo-item i.file-icon { color: var(--info); margin-right: 5px; font-size: 1rem; }
+.anexo-item button { background: none; border: none; color: var(--danger); cursor: pointer; padding: 5px; font-size: 1rem; }
+
+.history-card-clickable { background: var(--bg-secondary); padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 4px solid var(--brand-orange); color: var(--text-main); cursor: pointer; transition: 0.2s; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 8px; }
+.history-card-clickable:active { transform: scale(0.98); background: var(--border-color); }
+
+.detalhe-section { margin-bottom: 12px; }
+.detalhe-section label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 4px; }
+.detalhe-section p { font-size: 0.9rem; color: var(--text-main); margin: 0; line-height: 1.4; background: var(--bg-secondary); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); }
+.detalhe-section .detalhe-valor-destaque { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
 
 /* --- CLIENTES LISTA --- */
 .search-container { position: relative; margin-bottom: 15px; width: 100%; }
